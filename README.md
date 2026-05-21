@@ -2,7 +2,7 @@
 
 Standalone migrator for converting old review image media to WebP while keeping each media item attached to the same existing review.
 
-The migrator reads `reviews` and `review_medias`, uploads WebP base plus `_small`, `_medium`, and `_large` variants to S3, then updates `reviews.media_paths` and matching `review_medias.source_path` references after all image uploads for a review succeed.
+The migrator reads the configured review collection and `review_medias`, uploads WebP base plus `_small`, `_medium`, and `_large` variants to S3, then updates only the existing review `media_paths` entries and matching `review_medias.source_path` references after all image uploads for a review succeed.
 
 It does not delete original JPEG/PNG files in v1.
 
@@ -30,6 +30,9 @@ Optional defaults:
 - `IMAGE_WEBP_QUALITY=80`
 - `MIGRATION_BATCH_SIZE=50`
 - `MIGRATION_CONCURRENCY=3`
+- `REVIEW_COLLECTION_NAME=reviews`
+- `REVIEW_MEDIA_COLLECTION_NAME=review_medias`
+- `AUDIT_COLLECTION_NAME=review_media_webp_migrations`
 
 ## Commands
 
@@ -45,6 +48,12 @@ S3-only rehearsal. Uploads WebP objects and writes audit records, but does not u
 npm run migrate -- --limit=5 --skip-db-update
 ```
 
+Run against a copied review collection such as `reviews_test`:
+
+```bash
+npm run migrate -- --review-collection=reviews_test --limit=50
+```
+
 Run one review end-to-end:
 
 ```bash
@@ -57,11 +66,20 @@ Verify migrated references and S3 WebP objects:
 npm run verify -- --review-id=<reviewId>
 ```
 
+Use the same collection flags when verifying a non-default collection:
+
+```bash
+npm run verify -- --review-collection=reviews_test --limit=20
+```
+
 ## Flags
 
 - `--limit=1000` limits how many source reviews are scanned.
 - `--batch-size=50` controls Mongo cursor batch size and local processing chunks.
 - `--concurrency=3` controls parallel review processing.
+- `--review-collection=reviews_test` overrides `REVIEW_COLLECTION_NAME`.
+- `--review-media-collection=review_medias` overrides `REVIEW_MEDIA_COLLECTION_NAME`.
+- `--audit-collection=review_media_webp_migrations` overrides `AUDIT_COLLECTION_NAME`.
 - `--review-id=<mongoId>` only scans one review.
 - `--since=2025-01-01` only scans reviews created on or after the given date.
 - `--dry-run` logs intended work without S3 uploads or DB writes.
@@ -84,6 +102,8 @@ All resizing uses Sharp `rotate()` and `withoutEnlargement`, matching the backen
 ## Safety
 
 A review DB update happens only after every convertible image for that review has uploaded or already exists as valid WebP. If any image fails conversion/upload, the review references are left untouched.
+
+The migrator does not create replacement review documents and does not delete original JPEG/PNG S3 objects. It preserves the review document and `media_paths` array shape, replacing only convertible image path values with their WebP path. Unsupported media, video paths, existing WebP paths, and other document fields remain unchanged.
 
 Audit logs are written to:
 

@@ -118,7 +118,11 @@ async function run() {
   );
 
   const s3Client = createS3ClientFromEnv();
-  const query = { status: "db_updated" };
+  const query = {
+    status: "db_updated",
+    review_collection: collectionNames.review,
+    review_media_collection: collectionNames.reviewMedia,
+  };
   if (args.reviewId) query.review_id = args.reviewId;
 
   const records = await MigrationAudit.find(query)
